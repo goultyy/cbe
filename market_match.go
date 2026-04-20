@@ -4,17 +4,35 @@ import (
 	"database/sql"
 )
 
+// Generate a normalised price paid
+//
+// if ShareOrder.Direction == DIRECTION_NO, it'll normalise price_paid, else not. Simply a short-hand function. No errrors
+// as no potential for errors
+func (s ShareOrder) NormalisePriceQuantity(unnormalised_price_paid USDCBaseAmount, quantity int64) int64 {
+	if s.Direction == DIRECTION_YES {
+		return int64(unnormalised_price_paid) * quantity
+	}
+	// for no, we have to unnormalise, as the price comes from the opposite direction, we need to convert it back
+	return int64((1*USDC_BASE)-unnormalised_price_paid) * quantity
+}
+
 // Main matching engine, takes share order and attempts to process and match it
 //
 // The error here is not for a lack of matching instead for problems with data, all problems relating to matching
 // are reflected in ShareOrder.Status and ShareOrder.Quantity. We also don't do validation on data for the order
 // so we assume that data is all correct.
+//
+// This function also utilises normalising shares.
 func (so ShareOrder) MatchShareOrder() (Share, error) {
 	market, _ := GetMarket(so.MarketID)
+	son, _ := so.Normalise()
+
 	original_quantity := so.Quantity
 
+	// get pending orders in the opposite direction, because of the normalisation layer,
+	// we don't need to check for Yes/No.
 	// take a snapshot of all available trades on the same 'yes/no' and opposite direction
-	shares, err := market.GetShareOrdersByDirection(so.Direction, OrderDirection(1-int(so.BuySell)))
+	shares, err := market.GetShareOrdersNormalised(OrderDirection(1 - int(son.BuySell)))
 	if err == sql.ErrNoRows {
 		// nothing to match, so if we have FOK or IOC we kill, else we leave it for later
 		if so.ForceType == ORDER_FORCE_FOK || so.ForceType == ORDER_FORCE_IOC {
@@ -43,26 +61,26 @@ func (so ShareOrder) MatchShareOrder() (Share, error) {
 			if share.Quantity <= so.Quantity {
 				// we take all of the share
 				so.Quantity -= share.Quantity
-				price_paid += int64(share.BestPrice) * share.Quantity
+				price_paid += so.NormalisePriceQuantity(share.BestPrice, share.Quantity)
 				need_to_adjust = append(need_to_adjust, MarketMatchAdjustment{MarketID: so.MarketID, OrderID: share.OrderID, NewQuantity: 0})
 			} else {
 				// take a bit of it, and fill our entire order
 				need_to_adjust = append(need_to_adjust, MarketMatchAdjustment{MarketID: so.MarketID, OrderID: share.OrderID, NewQuantity: share.Quantity - so.Quantity})
-				price_paid += int64(share.BestPrice) * so.Quantity
+				price_paid += so.NormalisePriceQuantity(share.BestPrice, so.Quantity)
 				so.Quantity = 0
 			}
 		} else {
 			// if we have a limit order, we will only fill if the price is better than or equal to our limit price, for buy orders, better means lower, for sell orders, better means higher
-			if (so.BuySell == ORDER_BUY && share.BestPrice <= so.BestPrice) || (so.BuySell == ORDER_SELL && share.BestPrice >= so.BestPrice) {
+			if (son.BuySell == ORDER_BUY && share.BestPrice <= son.BestPrice) || (son.BuySell == ORDER_SELL && share.BestPrice >= son.BestPrice) {
 				if share.Quantity <= so.Quantity {
 					// same thing, take the entire share
 					so.Quantity -= share.Quantity
-					price_paid += int64(share.BestPrice) * share.Quantity
+					price_paid += so.NormalisePriceQuantity(share.BestPrice, share.Quantity)
 					need_to_adjust = append(need_to_adjust, MarketMatchAdjustment{MarketID: so.MarketID, OrderID: share.OrderID, NewQuantity: 0})
 				} else {
 					// take a bit
 					need_to_adjust = append(need_to_adjust, MarketMatchAdjustment{MarketID: so.MarketID, OrderID: share.OrderID, NewQuantity: share.Quantity - so.Quantity})
-					price_paid += int64(share.BestPrice) * so.Quantity
+					price_paid += so.NormalisePriceQuantity(share.BestPrice, so.Quantity)
 					so.Quantity = 0
 				}
 			} else {
@@ -102,10 +120,11 @@ func (so ShareOrder) MatchShareOrder() (Share, error) {
 
 	so.ReduceQuantity(so.Quantity)
 
+	// Create the share
 	share_id, err := CreateShare(Share{
 		MarketID:           so.MarketID,
 		OrderID:            so.OrderID,
-		Direction:          so.Direction,
+		Direction:          so.Direction, // original not normalised
 		Price:              USDCBaseAmount(price_paid),
 		Quantity:           original_quantity - so.Quantity,
 		Key:                ShareKey(NewGenericSecureKey()),

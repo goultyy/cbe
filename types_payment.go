@@ -18,6 +18,8 @@ type Payment struct {
 
 type USDCBaseAmount int64 // Amount in USDC base units (1e-6)
 
+var USDC_BASE USDCBaseAmount = 1000000 // Value of 1USDC in base units
+
 func (a USDCBaseAmount) ToDecimal() float64 {
 	return float64(a) / 1e6
 }

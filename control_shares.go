@@ -1,5 +1,7 @@
 package cbe
 
+import "fmt"
+
 // Create a share on the market
 //
 // Overrides Share.ShareID, Share.TimestampFulfilled and Share.Key
@@ -114,6 +116,37 @@ func (m Market) GetShareOrdersByDirection(direction ShareOutcomeDirection, buy_s
 	return orders, nil
 }
 
+// Get share orders in a normalised view
+//
+// This is core logic for the program converting BUY 10 NO @ 0.2 => SELL 10 YES @ 0.8 and
+// SELL 10 NO @ 0.2 => BUY 10 YES @ 0.8, this enforces the invariant that price_yes + price_no = 1,
+// to ensure there are no gaps in the market.
+//
+// ShareOrder.Normalise does the same as this, but will not alter the ShareOutcomeDirection, this will
+func (m Market) GetShareOrdersNormalised(buy_sell OrderDirection) ([]ShareOrder, error) {
+	fmt.Printf("Getting direction buy = %t\n", buy_sell == ORDER_BUY)
+	var orders []ShareOrder
+	yes_orders, err := m.GetShareOrdersByDirection(DIRECTION_YES, buy_sell)
+	if err != nil {
+		return []ShareOrder{}, err
+	}
+	orders = append(orders, yes_orders...)
+
+	// as sell no => buy no, we need to choose the inverse of what we originally wanted,
+	// then convert it to the type we intended
+	no_orders, err := m.GetShareOrdersByDirection(DIRECTION_NO, OrderDirection(1-int(buy_sell)))
+	for _, v := range no_orders {
+		if v.Type == ORDER_TYPE_LIMIT && v.Direction == DIRECTION_NO {
+			// change limit order to enforce invariant for NO orders.
+			v.BestPrice = ((USDC_BASE * 1) - v.BestPrice)
+		}
+		v.Direction = DIRECTION_YES // base direction
+		v.BuySell = buy_sell        // safely do this, as we already flipped in GSOBD
+		orders = append(orders, v)
+	}
+	return orders, nil
+}
+
 // Reduce quantity of share
 //
 // Used when somebody places a 'sell' order and it is processed
@@ -220,4 +253,20 @@ func (s ShareOrder) ReduceQuantity(new_quantity int64) error {
 		return err
 	}
 	return nil
+}
+
+// Normalise a 'no' order (unchanged for 'yes')
+//
+// This will convert a 'no' order to the opposite order on the 'yes' market. Does not alter
+// ShareOrderDirection.
+func (s ShareOrder) Normalise() (ShareOrder, error) {
+	if s.Direction == DIRECTION_YES {
+		return s, nil
+	}
+	if s.Type == ORDER_TYPE_LIMIT {
+		s.BestPrice = ((1 * USDC_BASE) - s.BestPrice)
+	}
+	s.BuySell = OrderDirection(1 - int(s.BuySell)) // sell => buy, buy => sell
+
+	return s, nil
 }

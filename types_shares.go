@@ -10,8 +10,8 @@ type ShareKey GenericSecureKey
 type ShareOutcomeDirection int
 
 const (
-	DIRECTION_YES ShareOutcomeDirection = iota // a share of 'yes' on current market
-	DIRECTION_NO                               // no
+	DIRECTION_YES ShareOutcomeDirection = iota // A share of 'yes' on current market
+	DIRECTION_NO                               // Share of 'no', treated as 'yes' for match making
 )
 
 // Share of market metadata
@@ -106,7 +106,7 @@ type ShareOrder struct {
 
 	// Money information
 	IPaymentID IPaymentID     // payout sent to this address
-	BestPrice  USDCBaseAmount // Highest/lowest for current direction, relevant for ORDER_TYPE_LIMIT only
+	BestPrice  USDCBaseAmount // Highest/lowest for current direction, relevant for ORDER_TYPE_LIMIT only, subject to normalisation
 	Type       OrderType
 	ForceType  OrderForceType
 
