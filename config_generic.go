@@ -9,19 +9,28 @@ type ConfigSQL struct {
 	DBName   string
 }
 
-// State of which USDC mint to use on Solana, testnet or mainnet
-type SolUSDCState int
+// State of solana to use
+type SolNetworkState int
 
 const (
-	SOL_USDC_STATE_TESTNET SolUSDCState = iota
-	SOL_USDC_STATE_MAINNET
+	SOL_NETWORK_STATE_DEVNET SolNetworkState = iota
+	SOL_NETWORK_STATE_MAINNET
 )
 
 // Get current USDC mint address per state
 func GetSolUSDCMint() string {
-	if SOL_USDC_STATE == SOL_USDC_STATE_TESTNET {
-		return SOL_USDC_TESTNET
+	if SOL_STATE == SOL_NETWORK_STATE_DEVNET {
+		return SOL_USDC_DEVNET
 	} else {
 		return SOL_USDC_MAINNET
+	}
+}
+
+// Get RPC address for solana
+func GetSolRPCAddress() string {
+	if SOL_STATE == SOL_NETWORK_STATE_DEVNET {
+		return SOL_DEVNET_RPC
+	} else {
+		return SOL_MAINNET_RPC
 	}
 }
