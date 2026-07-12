@@ -76,8 +76,8 @@ func (m Market) ChangeState(new_state MarketState) error {
 	return nil
 }
 
-// Get market statistics by direction (yes/no)
-// this will generate an error on no orders which you can safely ignore and treat as zero vals.
+// Get market statistics by direction (yes/no).
+// This will generate an error on no orders which you can safely ignore and treat as zero vals.
 func (m Market) GetMarketStatisticsDirection(direction ShareOutcomeDirection) (MarketDirectionStatistics, error) {
 	var stats MarketDirectionStatistics
 	stats.OutcomeDirection = direction

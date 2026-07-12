@@ -12,7 +12,7 @@ import (
 )
 
 // There are two types of transaction, I and H, I transactions are between cbe wallets,
-// H ones leave cbe wallets to an external one.
+// H ones leave cbe wallets to an external one. (I=Internal, H=Handoff)
 //
 // Functions exposed to user space (or even outside the module) should ensure that
 // they check:
@@ -20,7 +20,7 @@ import (
 // 2. Destination is active
 // 3. Source wallet can afford (i.e. relative to funds on holds)
 //
-// TODO: Most I transaction functions are simply slight changes of H ones, refactor.
+// TODO Refactor: Most I transaction functions are simply slight changes of H ones also add sending to be related to a wallet (a Wallet).Send...
 
 // Create new payment
 func CreatePayment(payment Payment) (IPaymentID, error) {
@@ -55,6 +55,34 @@ func (a SolanaWallet) CanAfford(amount USDCBaseAmount) bool {
 	}
 
 	return true
+}
+
+// Place funds on hold
+func (a SolanaWallet) PlaceOnHold(amount USDCBaseAmount) error {
+	if a.State != SOLANA_WALLET_STATE_ACTIVE {
+		return fmt.Errorf("wallet is not active")
+	}
+
+	bal, err := GetSolanaWalletUSDCBalance(a.IWalletID)
+	if err != nil {
+		return err
+	}
+
+	if bal < amount {
+		return fmt.Errorf("wallet cannot afford amount")
+	}
+
+	a.BalanceOnHold += amount
+	sql, err := ReturnSQLConnection()
+	if err != nil {
+		return err
+	}
+
+	_, err = sql.Exec("UPDATE user_wallets SET BalanceOnHold = ? WHERE IWalletID = ?", a.BalanceOnHold, a.IWalletID)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Generate a new Solana wallet for a user and store it in the database. Returns the wallet or error if failed.
