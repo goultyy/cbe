@@ -39,6 +39,24 @@ func CreatePayment(payment Payment) (IPaymentID, error) {
 	return payment.IPaymentID, nil
 }
 
+// Get payment information
+func GetPayment(ipayment_id GenericSecureID) (Payment, error) {
+	sql, err := ReturnSQLConnection()
+	if err != nil {
+		return Payment{}, err
+	}
+
+	row := sql.QueryRow("SELECT IPaymentID, SolanaTransactionID, SourceUserID, Amount, CBEFee, SolanaFee, Timestamp FROM payments WHERE IPaymentID = ?", string(ipayment_id))
+
+	var payment Payment
+	err = row.Scan(&payment.IPaymentID, &payment.SolanaTransactionID, &payment.SourceUserID, &payment.Amount, &payment.CBEFee, &payment.SolanaFee, &payment.Timestamp)
+	if err != nil {
+		return Payment{}, err
+	}
+
+	return payment, nil
+}
+
 // Can a user afford a transaction with the amount on hold
 func (a SolanaWallet) CanAfford(amount USDCBaseAmount) bool {
 	if a.State != SOLANA_WALLET_STATE_ACTIVE {

@@ -134,6 +134,7 @@ func GetUserNotificationsByPriority(user_id GenericSecureID, priority UserNotifi
 // Create a new user
 func NewUser() (User, error) {
 	var new_user User
+	// take nothing from the user, we do it all
 	new_user.UserID = NewGenericSecureID()
 	new_user.Key = NewGenericSecureKey()
 	new_user.State = USER_STATE_ACTIVE
@@ -185,7 +186,7 @@ func (a User) ChangeUserState(new_state UserState) error {
 		return err
 	}
 
-	_, err = sql.Exec("UPDATE users SET State = $1 WHERE UserID = ?")
+	_, err = sql.Exec("UPDATE users SET State = ? WHERE UserID = ?", new_state, a.UserID)
 	if err != nil {
 		return err
 	}
@@ -352,4 +353,130 @@ func (a User) GetShareOrders() ([]ShareOrder, error) {
 	}
 
 	return orders, nil
+}
+
+// Create a new user session
+func NewSession(user_id GenericSecureID, browser_stamp string) (UserSessions, error) {
+	user, err := GetUserByID(user_id)
+	if err != nil {
+		return UserSessions{}, err
+	}
+
+	if user.State != USER_STATE_ACTIVE {
+		return UserSessions{}, fmt.Errorf("refusing to make session for inactive user")
+	}
+
+	sql, err := ReturnSQLConnection()
+	if err != nil {
+		return UserSessions{}, err
+	}
+
+	var ne UserSessions
+	ne.Created = NewTimestamp()
+	ne.SessionID = NewGenericSecureID()
+	ne.SessionKey = NewGenericSecureKey()
+
+	ne.UserID = user_id
+	ne.Expiry = ne.Created + USER_SESSION_LENGTH
+	ne.State = USER_SESSION_ACTIVE
+	ne.BrowserStamp = browser_stamp
+
+	_, err = sql.Exec("INSERT INTO user_sessions (SessionID, UserID, SessionKey, BrowserStamp, State, Created, Expiry) VALUES (?, ?, ?, ?, ?, ?, ?)", ne.SessionID, ne.UserID, ne.SessionKey, ne.BrowserStamp, ne.State, ne.Created, ne.Expiry)
+	if err != nil {
+		return UserSessions{}, err
+	}
+
+	return ne, nil
+}
+
+// Get session by ID
+func GetSessionByID(session_id GenericSecureID) (UserSessions, error) {
+	sql, err := ReturnSQLConnection()
+	if err != nil {
+		return UserSessions{}, err
+	}
+
+	var session UserSessions
+	row := sql.QueryRow("SELECT SessionID, UserID, SessionKey, BrowserStamp, State, Created, Expiry FROM user_sessions WHERE SessionID = ?")
+	err = row.Scan(
+		&session.SessionID,
+		&session.UserID,
+		&session.SessionKey,
+		&session.BrowserStamp,
+		&session.State,
+		&session.Created,
+		&session.Expiry)
+
+	return session, err
+}
+
+// Get session by SessionKey
+func GetSessionByKey(session_key GenericSecureKey) (UserSessions, error) {
+	sql, err := ReturnSQLConnection()
+	if err != nil {
+		return UserSessions{}, err
+	}
+
+	var session UserSessions
+	row := sql.QueryRow("SELECT SessionID, UserID, SessionKey, BrowserStamp, State, Created, Expiry FROM user_sessions WHERE SessionKey = ?", session_key)
+	err = row.Scan(
+		&session.SessionID,
+		&session.UserID,
+		&session.SessionKey,
+		&session.BrowserStamp,
+		&session.State,
+		&session.Created,
+		&session.Expiry)
+
+	return session, err
+}
+
+// Get all sessions for a user
+func GetUserSessions(user_id GenericSecureID) ([]UserSessions, error) {
+	sql, err := ReturnSQLConnection()
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := sql.Query("SELECT SessionID, UserID, SessionKey, BrowserStamp, State, Created, Expiry FROM user_sessions WHERE UserID = ?", user_id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sessions []UserSessions
+	for rows.Next() {
+		var session UserSessions
+		err := rows.Scan(
+			&session.SessionID,
+			&session.UserID,
+			&session.SessionKey,
+			&session.BrowserStamp,
+			&session.State,
+			&session.Created,
+			&session.Expiry,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		sessions = append(sessions, session)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return sessions, nil
+}
+
+// Change the state of a session
+func (a UserSessions) ChangeState(new_state UserSessionState) error {
+	sql, err := ReturnSQLConnection()
+	if err != nil {
+		return err
+	}
+
+	_, err = sql.Exec("UPDATE user_sessions SET State = ? WHERE SessionID = ?", new_state, a.SessionID)
+	return err
 }

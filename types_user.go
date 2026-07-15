@@ -40,3 +40,32 @@ type User struct {
 	State   UserState
 	Created Timestamp
 }
+
+// State of a User Session
+type UserSessionState int
+
+const (
+	USER_SESSION_ACTIVE        UserSessionState = iota
+	USER_SESSION_TERMINATED                     // self terminated by a session owner
+	USER_SESSION_EXPIRED                        // triggered by attempting to use an expired token
+	USER_SESSION_SYSTERMINATED                  // terminated by the system for some reason
+)
+
+// Length of a user session
+var USER_SESSION_LENGTH Timestamp = (60 * 60 * 24)
+
+// Sessions (for any online based format i.e. APIs)
+type UserSessions struct {
+	// Identifiers
+	SessionID GenericSecureID
+	UserID    GenericSecureID
+
+	// Data
+	SessionKey   GenericSecureKey // generated (VARCHAR(5000))
+	BrowserStamp string           // way to identify browser, could just be generated - doesn't really matter
+
+	// Meta data
+	State   UserSessionState
+	Created Timestamp
+	Expiry  Timestamp
+}

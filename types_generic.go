@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-type Timestamp int64 // Linux epoch
+type Timestamp int64 // Seconds since the epoch (or sometimes just seconds)
 
 // Return linux epoch timestamp for current time
 func NewTimestamp() Timestamp {
@@ -46,7 +46,7 @@ func NewGenericSecureID() GenericSecureID {
 	return GenericSecureID(NewGenericLengthID(64))
 }
 
-// Secure key for shares, 256 characters
+// Secure key for shares etc, 256 characters
 type GenericSecureKey string
 
 func NewGenericSecureKey() GenericSecureKey {
