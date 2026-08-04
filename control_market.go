@@ -1,5 +1,35 @@
 package cbe
 
+// Get all markets with filters.
+func GetAllMarkets(state MarketState, created_front Timestamp, created_back Timestamp, types MarketType) ([]Market, error) {
+	sql, e := ReturnSQLConnection()
+	if e != nil {
+		return []Market{}, e
+	}
+
+	rows, e := sql.Query("SELECT MarketID, Name, Description, Type, State, TimestampCreated FROM markets WHERE State = ? AND Type = ? AND TimestampCreated > ? AND TimestampCreated < ?", state, types, created_back, created_front)
+	if e != nil {
+		return []Market{}, e
+	}
+
+	defer rows.Close()
+	var output []Market
+
+	for rows.Next() {
+		var temp Market
+
+		e = rows.Scan(&temp.MarketID, &temp.Name, &temp.Description, &temp.Type, &temp.State, &temp.TimestampCreated)
+
+		if e != nil {
+			return []Market{}, e
+		}
+
+		output = append(output, temp)
+	}
+
+	return output, nil
+}
+
 // Get market by ID
 func GetMarket(market_id MarketID) (Market, error) {
 	var data Market
@@ -9,7 +39,7 @@ func GetMarket(market_id MarketID) (Market, error) {
 		return Market{}, err
 	}
 
-	err = sql.QueryRow("SELECT MarketID, Name, Description, Type, TimestampCreated FROM markets WHERE MarketID = ?", market_id).Scan(&data.MarketID, &data.Name, &data.Description, &data.Type, &data.TimestampCreated)
+	err = sql.QueryRow("SELECT MarketID, Name, Description, Type, TimestampCreated, State FROM markets WHERE MarketID = ?", market_id).Scan(&data.MarketID, &data.Name, &data.Description, &data.Type, &data.TimestampCreated, &data.State)
 	if err != nil {
 		return Market{}, err
 	}

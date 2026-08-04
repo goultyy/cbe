@@ -2,6 +2,14 @@ package cbe
 
 import "fmt"
 
+/*
+	Todo: the codebase is split into two due to my late adaptation of the cbe package, which is slightly messy,
+	because the user system was originally going to be separate, then I decided to add it into cbe, so we basically
+	need to continously reference between the link tables for the relationships between users and share orders etc.
+
+	this needs refactoring and a complete SQL schema redesign, but for now it works and is functional, so I will leave it as is.
+*/
+
 // Create a new notification for the user
 func NewUserNotification(notification UserNotification) (GenericSecureID, error) {
 	sql, err := ReturnSQLConnection()
@@ -10,6 +18,8 @@ func NewUserNotification(notification UserNotification) (GenericSecureID, error)
 	}
 
 	notification.NotificationID = NewGenericSecureID()
+	notification.Timestamp = NewTimestamp()
+
 	_, err = sql.Exec(
 		"INSERT INTO user_notifications (NotificationID, UserID, Source, Description, Priority, Timestamp) VALUES (?, ?, ?, ?, ?, ?)",
 		notification.NotificationID,
@@ -161,7 +171,7 @@ func GetUserByID(user_id GenericSecureID) (User, error) {
 	}
 
 	row := sql.QueryRow(
-		"SELECT UserID, UserKey, State, Created FROM users WHERE user_id = ?",
+		"SELECT UserID, UserKey, State, Created FROM users WHERE UserID = ?",
 		user_id,
 	)
 
@@ -194,7 +204,7 @@ func (a User) ChangeUserState(new_state UserState) error {
 	return nil
 }
 
-// Allocate a share
+// Allocate a share, this can be empty - only requires ShareID & MarketID
 func (a User) AllocateShare(share Share) error {
 	if a.State != USER_STATE_ACTIVE {
 		return fmt.Errorf("refusing to allocate to suspended user")
@@ -224,7 +234,7 @@ func (a User) AllocateShare(share Share) error {
 	return nil
 }
 
-// Allocate a share order
+// Allocate a share order, this can be an empty struct - it only requires MarketID & OrderID
 func (a User) AllocateShareOrder(share_order ShareOrder) error {
 	if a.State != USER_STATE_ACTIVE {
 		return fmt.Errorf("refusing to allocate to suspended user")
@@ -355,6 +365,132 @@ func (a User) GetShareOrders() ([]ShareOrder, error) {
 	return orders, nil
 }
 
+// Get share by ID from User data
+func (a User) GetShareByID(share_id ShareID) (Share, error) {
+	sql, err := ReturnSQLConnection()
+	if err != nil {
+		return Share{}, err
+	}
+
+	row := sql.QueryRow(
+		"SELECT MarketID FROM user_shares WHERE IUserID = ? AND ShareID = ?",
+		a.UserID,
+		share_id,
+	)
+
+	var marketID MarketID
+	err = row.Scan(&marketID)
+	if err != nil {
+		return Share{}, err
+	}
+
+	market, err := GetMarket(marketID)
+	if err != nil {
+		return Share{}, fmt.Errorf("failed to find market for share %s: %w", share_id, err)
+	}
+
+	share, err := market.GetShare(share_id)
+	if err != nil {
+		return Share{}, fmt.Errorf("failed to get share %s from market %s: %w", share_id, marketID, err)
+	}
+
+	return share, nil
+}
+
+// Get share orders by ID from User data
+func (a User) GetShareOrderByID(order_id OrderID) (ShareOrder, error) {
+	sql, err := ReturnSQLConnection()
+	if err != nil {
+		return ShareOrder{}, err
+	}
+
+	row := sql.QueryRow(
+		"SELECT MarketID FROM user_share_orders WHERE IUserID = ? AND OrderID = ?",
+		a.UserID,
+		order_id,
+	)
+
+	var marketID MarketID
+	err = row.Scan(&marketID)
+	if err != nil {
+		return ShareOrder{}, err
+	}
+
+	market, err := GetMarket(marketID)
+	if err != nil {
+		return ShareOrder{}, fmt.Errorf("failed to find market for order %s: %w", order_id, err)
+	}
+
+	order, err := market.GetShareOrder(order_id)
+	if err != nil {
+		return ShareOrder{}, fmt.Errorf("failed to get order %s from market %s: %w", order_id, marketID, err)
+	}
+
+	return order, nil
+}
+
+// Reverse lookup which user initiated a share
+func GetUserIDByShareID(share_id ShareID) (GenericSecureID, error) {
+	sql, err := ReturnSQLConnection()
+	if err != nil {
+		return GenericSecureID(""), err
+	}
+
+	row := sql.QueryRow(
+		"SELECT IUserID FROM user_shares WHERE ShareID = ?",
+		share_id,
+	)
+
+	var userID GenericSecureID
+	err = row.Scan(&userID)
+	if err != nil {
+		return GenericSecureID(""), err
+	}
+	return userID, nil
+}
+
+// Reverse lookup which user initiated a share order
+func GetUserIDByShareOrderID(order_id OrderID) (GenericSecureID, error) {
+	sql, err := ReturnSQLConnection()
+	if err != nil {
+		return GenericSecureID(""), err
+	}
+
+	row := sql.QueryRow(
+		"SELECT IUserID FROM user_share_orders WHERE OrderID = ?",
+		order_id,
+	)
+
+	var userID GenericSecureID
+	err = row.Scan(&userID)
+
+	if err != nil {
+		return GenericSecureID(""), err
+	}
+
+	return userID, nil
+}
+
+// Get a MarketID by a ShareID, this is useful for reverse lookups when we only have a ShareID and need to find the MarketID
+func GetMarketIDByShareID(share_id ShareID) (MarketID, error) {
+	sql, err := ReturnSQLConnection()
+	if err != nil {
+		return MarketID(""), err
+	}
+
+	row := sql.QueryRow(
+		"SELECT MarketID FROM user_shares WHERE ShareID = ?",
+		share_id,
+	)
+
+	var marketID MarketID
+	err = row.Scan(&marketID)
+	if err != nil {
+		return MarketID(""), err
+	}
+	return marketID, nil
+}
+
 // Create a new user session
 func NewSession(user_id GenericSecureID, browser_stamp string) (UserSessions, error) {
 	user, err := GetUserByID(user_id)
@@ -397,7 +533,7 @@ func GetSessionByID(session_id GenericSecureID) (UserSessions, error) {
 	}
 
 	var session UserSessions
-	row := sql.QueryRow("SELECT SessionID, UserID, SessionKey, BrowserStamp, State, Created, Expiry FROM user_sessions WHERE SessionID = ?")
+	row := sql.QueryRow("SELECT SessionID, UserID, SessionKey, BrowserStamp, State, Created, Expiry FROM user_sessions WHERE SessionID = ?", session_id)
 	err = row.Scan(
 		&session.SessionID,
 		&session.UserID,

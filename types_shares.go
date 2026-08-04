@@ -9,6 +9,17 @@ type ShareKey GenericSecureKey
 // Direction of share on market
 type ShareOutcomeDirection int
 
+func (a ShareOutcomeDirection) String() string {
+	switch a {
+	case DIRECTION_YES:
+		return "yes"
+	case DIRECTION_NO:
+		return "no"
+	default:
+		return "unknown"
+	}
+}
+
 const (
 	DIRECTION_YES ShareOutcomeDirection = iota // A share of 'yes' on current market
 	DIRECTION_NO                               // Share of 'no', treated as 'yes' for match making
@@ -23,7 +34,7 @@ type Share struct {
 
 	// General data
 	Direction ShareOutcomeDirection
-	Price     USDCBaseAmount // total price of shares
+	Price     USDCBaseAmount // price per share, important distinction and previously confused
 	Quantity  int64          // number of shares
 
 	// Authentication section
@@ -49,6 +60,17 @@ const (
 	ORDER_TYPE_LIMIT
 )
 
+func (a OrderType) String() string {
+	switch a {
+	case ORDER_TYPE_MARKET:
+		return "market"
+	case ORDER_TYPE_LIMIT:
+		return "limit"
+	default:
+		return "unknown"
+	}
+}
+
 // Specifies how exchange should fulfill
 type OrderForceType int
 
@@ -62,6 +84,19 @@ const (
 	// (good until cancel) Keep in order book, most generic one
 	ORDER_FORCE_GTC
 )
+
+func (a OrderForceType) String() string {
+	switch a {
+	case ORDER_FORCE_FOK:
+		return "fill or kill"
+	case ORDER_FORCE_IOC:
+		return "immediate or cancel"
+	case ORDER_FORCE_GTC:
+		return "good until cancel"
+	default:
+		return "unknown"
+	}
+}
 
 // Status of a buy/sell order
 type OrderStatus int
@@ -83,6 +118,21 @@ const (
 	ORDER_STATUS_CANCELLED
 )
 
+func (a OrderStatus) String() string {
+	switch a {
+	case ORDER_STATUS_PENDING:
+		return "pending"
+	case ORDER_STATUS_FILLED:
+		return "filled"
+	case ORDER_STATUS_PARTIALLY_FILLED:
+		return "partially filled"
+	case ORDER_STATUS_CANCELLED:
+		return "cancelled"
+	default:
+		return "unknown"
+	}
+}
+
 // Direction of order (buy/sell)
 type OrderDirection int
 
@@ -90,6 +140,17 @@ const (
 	ORDER_BUY  OrderDirection = iota // Buy
 	ORDER_SELL                       // Sell
 )
+
+func (a OrderDirection) String() string {
+	switch a {
+	case ORDER_BUY:
+		return "buy"
+	case ORDER_SELL:
+		return "sell"
+	default:
+		return "unknown"
+	}
+}
 
 // Order to buy a share
 type ShareOrder struct {

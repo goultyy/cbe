@@ -53,6 +53,8 @@ func (a USDCBaseAmount) ToDecimal() float64 {
 
 type SolanaBaseAmount int64 // Amount in Solana base units (1e-9)
 
+var SOLANA_BASE SolanaBaseAmount = 1000000000 // Value of 1SOL in base units
+
 func (a SolanaBaseAmount) ToDecimal() float64 {
 	return float64(a) / 1e9
 }

@@ -24,8 +24,11 @@ type Market struct {
 	MarketID    MarketID
 	Name        string // 100 characters
 	Description string // 500 characters
-	Type        MarketType
-	State       MarketState
+
+	// Meta data
+	Type  MarketType
+	State MarketState
+
 	// Timestamps
 	TimestampCreated Timestamp
 }

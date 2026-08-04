@@ -35,7 +35,7 @@ func (m Market) GetShare(share_id ShareID) (Share, error) {
 		return Share{}, err
 	}
 
-	err = sql.QueryRow("SELECT ShareID, OrderID, Direction, Quantity, Price, Key, TimestampRequested, TimestampFulfilled FROM `"+string(m.MarketID)+"_shares` WHERE ShareID = ?", share_id).Scan(&data.ShareID, &data.OrderID, &data.Direction, &data.Quantity, &data.Price, &data.Key, &data.TimestampRequested, &data.TimestampFulfilled)
+	err = sql.QueryRow("SELECT ShareID, OrderID, Direction, Quantity, Price, `Key`, TimestampRequested, TimestampFulfilled FROM `"+string(m.MarketID)+"_shares` WHERE ShareID = ?", share_id).Scan(&data.ShareID, &data.OrderID, &data.Direction, &data.Quantity, &data.Price, &data.Key, &data.TimestampRequested, &data.TimestampFulfilled)
 	if err != nil {
 		return Share{}, err
 	}
@@ -50,7 +50,33 @@ func (m Market) GetSharesByOrderID(order_id OrderID) ([]Share, error) {
 		return nil, err
 	}
 
-	rows, err := sql.Query("SELECT ShareID, OrderID, Direction, Quantity, Price, Key, TimestampRequested, TimestampFulfilled FROM `"+string(m.MarketID)+"_shares` WHERE OrderID = ?", order_id)
+	rows, err := sql.Query("SELECT ShareID, OrderID, Direction, Quantity, Price, `Key`, TimestampRequested, TimestampFulfilled FROM `"+string(m.MarketID)+"_shares` WHERE OrderID = ?", order_id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var shares []Share
+	for rows.Next() {
+		var data Share
+		err := rows.Scan(&data.ShareID, &data.OrderID, &data.Direction, &data.Quantity, &data.Price, &data.Key, &data.TimestampRequested, &data.TimestampFulfilled)
+		data.MarketID = m.MarketID
+		if err != nil {
+			return nil, err
+		}
+		shares = append(shares, data)
+	}
+	return shares, nil
+}
+
+// Get all shares on a market
+func (m Market) GetShares() ([]Share, error) {
+	sql, err := ReturnSQLConnection()
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := sql.Query("SELECT ShareID, OrderID, Direction, Quantity, Price, `Key`, TimestampRequested, TimestampFulfilled FROM `" + string(m.MarketID) + "_shares`")
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +134,7 @@ func (m Market) GetShareOrdersByDirection(direction ShareOutcomeDirection, buy_s
 	for rows.Next() {
 		var data ShareOrder
 		err := rows.Scan(&data.OrderID, &data.Direction, &data.Quantity, &data.Status, &data.IPaymentID, &data.BestPrice, &data.Type, &data.ForceType, &data.TimestampRequested, &data.BuySell)
+		data.MarketID = m.MarketID
 		if err != nil {
 			return nil, err
 		}
@@ -230,7 +257,7 @@ func (s ShareOrder) UpdateStatus(new_status OrderStatus) error {
 	return nil
 }
 
-// Reduce quantity of remaining shares in order to fulfill, needed for ForceType == ORDER_FORCE_GTC
+// Set quantity of remaining shares in order to fulfill, needed for ForceType == ORDER_FORCE_GTC
 // wherein we must keep trying to fulfill, or for ForceType == ORDER_FORCE_IOC where we fill as much then leave it
 //
 // This also sets the ShareOrder.TimestampCompleted for constraints outlined in ShareOrder.UpdateStatus

@@ -40,7 +40,7 @@ func CreatePayment(payment Payment) (IPaymentID, error) {
 }
 
 // Get payment information
-func GetPayment(ipayment_id GenericSecureID) (Payment, error) {
+func GetPaymentByID(ipayment_id GenericSecureID) (Payment, error) {
 	sql, err := ReturnSQLConnection()
 	if err != nil {
 		return Payment{}, err
@@ -55,6 +55,33 @@ func GetPayment(ipayment_id GenericSecureID) (Payment, error) {
 	}
 
 	return payment, nil
+}
+
+// Get all payments
+func GetAllPayments(userid GenericSecureID, timestamp_start Timestamp, timestamp_end Timestamp) ([]Payment, error) {
+
+	sql, err := ReturnSQLConnection()
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := sql.Query("SELECT IPaymentID, SolanaTransactionID, SourceUserID, Amount, CBEFee, SolanaFee, Timestamp FROM payments WHERE SourceUserID = ? AND Timestamp >= ? AND Timestamp <= ? ORDER BY Timestamp DESC", userid, timestamp_start, timestamp_end)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var payments []Payment
+	for rows.Next() {
+		var p Payment
+		err := rows.Scan(&p.IPaymentID, &p.SolanaTransactionID, &p.SourceUserID, &p.Amount, &p.CBEFee, &p.SolanaFee, &p.Timestamp)
+		if err != nil {
+			return nil, err
+		}
+		payments = append(payments, p)
+	}
+
+	return payments, nil
 }
 
 // Can a user afford a transaction with the amount on hold
@@ -75,7 +102,7 @@ func (a SolanaWallet) CanAfford(amount USDCBaseAmount) bool {
 	return true
 }
 
-// Place funds on hold
+// Place funds on hold, notification issued in new thread
 func (a SolanaWallet) PlaceOnHold(amount USDCBaseAmount) error {
 	if a.State != SOLANA_WALLET_STATE_ACTIVE {
 		return fmt.Errorf("wallet is not active")
@@ -100,6 +127,43 @@ func (a SolanaWallet) PlaceOnHold(amount USDCBaseAmount) error {
 	if err != nil {
 		return err
 	}
+
+	go NewUserNotification(UserNotification{
+		UserID:      a.UserID,
+		Source:      "System placed hold on wallet",
+		Description: fmt.Sprintf("System placed hold on wallet %s by %d USDC base units, new hold is %d USDC base units", a.IWalletID, amount, a.BalanceOnHold),
+	})
+
+	return nil
+}
+
+// Reduce on hold (a.BalanceOnHold = a.BalanceOnHold - amount), notification issued in new thread
+func (a SolanaWallet) ReduceHold(amount USDCBaseAmount) error {
+	if a.State != SOLANA_WALLET_STATE_ACTIVE {
+		return fmt.Errorf("wallet is not active")
+	}
+
+	if a.BalanceOnHold < amount {
+		return fmt.Errorf("wallet cannot reduce hold by amount")
+	}
+
+	a.BalanceOnHold -= amount
+	sql, err := ReturnSQLConnection()
+	if err != nil {
+		return err
+	}
+
+	_, err = sql.Exec("UPDATE user_wallets SET BalanceOnHold = ? WHERE IWalletID = ?", a.BalanceOnHold, a.IWalletID)
+	if err != nil {
+		return err
+	}
+
+	go NewUserNotification(UserNotification{
+		UserID:      a.UserID,
+		Source:      "System reduced hold on wallet",
+		Description: fmt.Sprintf("System reduced hold on wallet %s by %d USDC base units, new hold is %d USDC base units", a.IWalletID, amount, a.BalanceOnHold),
+	})
+
 	return nil
 }
 
