@@ -52,7 +52,7 @@ const (
 )
 
 // Length of a user session
-var USER_SESSION_LENGTH Timestamp = (60 * 60 * 24)
+var USER_SESSION_LENGTH Timestamp = (60 * 60 * 24 * 30) // added 30 for dev
 
 // Sessions (for any online based format i.e. APIs)
 type UserSessions struct {

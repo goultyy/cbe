@@ -10,12 +10,16 @@ type Payment struct {
 	SourceUserID        GenericSecureID
 
 	// All in USDC base amount (1e-6)
-	Amount USDCBaseAmount
-	CBEFee USDCBaseAmount // Charged by cbe
+	USDCAmount USDCBaseAmount
+	CBEFee     USDCBaseAmount // Charged by cbe
 
-	SolanaFee SolanaBaseAmount // Fee charged by solana network
+	SolanaFee    SolanaBaseAmount // Fee charged by solana network
+	SolanaAmount SolanaBaseAmount
 
 	Timestamp Timestamp
+
+	// OBSOLETE
+	Amount USDCBaseAmount
 }
 
 type SolanaWalletState int16 // State of the wallet
@@ -37,8 +41,9 @@ type SolanaWallet struct {
 	PublicKey  string
 
 	// Metadata
-	UserAddedDescription string         // 500 chars
-	BalanceOnHold        USDCBaseAmount // Amount on hold for orders
+	UserAddedDescription string           // 500 chars
+	BalanceOnHold        USDCBaseAmount   // Amount on hold for orders
+	BalanceOnHoldSOL     SolanaBaseAmount // Amount on hold to pay for transactions
 	State                SolanaWalletState
 	Created              Timestamp
 }

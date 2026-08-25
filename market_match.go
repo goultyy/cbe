@@ -24,6 +24,8 @@ func (s ShareOrder) NormalisePriceQuantity(unnormalised_price_paid USDCBaseAmoun
 // are reflected in ShareOrder.Status and ShareOrder.Quantity. We also don't do validation on data for the order
 // so we assume that data is all correct.
 //
+// * This will strike a trade at the BUY price, NOT at the SELL price.
+//
 // This function also utilises normalising shares.
 //
 // Recent changes: individual shares added with each different price paid. Changed/clarified how (ShareOrder).BestPrice and (Share).Price works
@@ -171,6 +173,7 @@ func (so ShareOrder) MatchShareOrder() ([]Share, error) {
 
 	for _, v := range need_to_adjust {
 		share, _ := market.GetShareOrder(v.OrderID)
+		// here we now need to move some money
 		err := share.ReduceQuantity(v.NewQuantity)
 		if err != nil {
 			return []Share{}, err
